@@ -6,6 +6,8 @@ import sqlite3
 import pyodbc
 
 
+#========================================= Connect to MySQL =============================================
+
 def connect_to_mysql(database):
     try:
         connection = mysql.connector.connect(
@@ -15,10 +17,12 @@ def connect_to_mysql(database):
             password=st.secrets["MySQL"]["MYSQL_PASSWORD"],
         )
         cursor = connection.cursor()
-        try:
+        
+        try:  # Firstly try to create the database if it is not exist
             cursor.execute(f"CREATE DATABASE {database}")
             connection.commit()
-        except:
+
+        except:  # otherwise use it if it exist
             cursor.execute(f"Use {database}")
             connection.commit()
 
@@ -27,13 +31,67 @@ def connect_to_mysql(database):
         st.error(f"❌ Connection failed: {e}")
 
 
+#=========================================== Connect to SQLite ==================================================
+
 def connect_to_sqlite(database):
-    try:
+    try:  # This handles both cases existing or non existing databases (If it exist, connect that otherwise create new one)
         connection = sqlite3.connect(database, check_same_thread=False)
         st.session_state.connection = connection
     except Exception as e:
         st.error(f"❌ Connection failed: {e}")
 
+
+#=========================================== Connect to PostgreSQL ==================================================
+
+def connect_to_postgres(database: str):
+    try:
+        # Try connecting directly to the target database
+        connection = psycopg2.connect(
+            host=st.secrets["PostgreSQL"]["POSTGRES_HOST"],
+            port=st.secrets['PostgreSQL']['POSTGRES_PORT'],
+            user=st.secrets['PostgreSQL']['POSTGRES_USER'],
+            password=st.secrets['PostgreSQL']['POSTGRES_PASSWORD'],
+            dbname=database
+        )
+        connection.autocommit = True
+        st.session_state.connection = connection
+
+    except Exception:
+        try:
+            # Connect to default DB (postgres) to create the target database
+            fallback_conn = psycopg2.connect(
+                host=st.secrets["PostgreSQL"]["POSTGRES_HOST"],
+                port=st.secrets['PostgreSQL']['POSTGRES_PORT'],
+                user=st.secrets['PostgreSQL']['POSTGRES_USER'],
+                password=st.secrets['PostgreSQL']['POSTGRES_PASSWORD'],
+                dbname=st.secrets['PostgreSQL']['POSTGRES_DB']
+            )
+            fallback_conn.autocommit = True
+            cursor = fallback_conn.cursor()
+
+            cursor.execute(
+                sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database))
+            )
+
+            cursor.close()
+            fallback_conn.close()
+
+            # Reconnect to the newly created database
+            connection = psycopg2.connect(
+                host=st.secrets["PostgreSQL"]["POSTGRES_HOST"],
+                port=st.secrets['PostgreSQL']['POSTGRES_PORT'],
+                user=st.secrets['PostgreSQL']['POSTGRES_USER'],
+                password=st.secrets['PostgreSQL']['POSTGRES_PASSWORD'],
+                dbname=database
+            )
+            connection.autocommit = True
+            st.session_state.connection = connection
+
+        except Exception as e:
+            st.error(f"❌ Failed to create/connect database: {e}")
+
+
+#=========================================== Connect to SQL server ==================================================
 
 def connect_to_sqlserver(database: str):
     try:
@@ -86,52 +144,4 @@ def connect_to_sqlserver(database: str):
             st.error(f"❌ Failed to create/connect database: {e}")
 
 
-
-def connect_to_postgres(database: str):
-    try:
-        # Try connecting directly to the target database
-        connection = psycopg2.connect(
-            host=st.secrets["PostgreSQL"]["POSTGRES_HOST"],
-            port=st.secrets['PostgreSQL']['POSTGRES_PORT'],
-            user=st.secrets['PostgreSQL']['POSTGRES_USER'],
-            password=st.secrets['PostgreSQL']['POSTGRES_PASSWORD'],
-            dbname=database
-        )
-        connection.autocommit = True
-        st.session_state.connection = connection
-
-    except Exception:
-        try:
-            # Connect to default DB (postgres) to create the target database
-            fallback_conn = psycopg2.connect(
-                host=st.secrets["PostgreSQL"]["POSTGRES_HOST"],
-                port=st.secrets['PostgreSQL']['POSTGRES_PORT'],
-                user=st.secrets['PostgreSQL']['POSTGRES_USER'],
-                password=st.secrets['PostgreSQL']['POSTGRES_PASSWORD'],
-                dbname=st.secrets['PostgreSQL']['POSTGRES_DB']
-            )
-            fallback_conn.autocommit = True
-            cursor = fallback_conn.cursor()
-
-            cursor.execute(
-                sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database))
-            )
-
-            cursor.close()
-            fallback_conn.close()
-
-            # Reconnect to the newly created database
-            connection = psycopg2.connect(
-                host=st.secrets["PostgreSQL"]["POSTGRES_HOST"],
-                port=st.secrets['PostgreSQL']['POSTGRES_PORT'],
-                user=st.secrets['PostgreSQL']['POSTGRES_USER'],
-                password=st.secrets['PostgreSQL']['POSTGRES_PASSWORD'],
-                dbname=database
-            )
-            connection.autocommit = True
-            st.session_state.connection = connection
-
-        except Exception as e:
-            st.error(f"❌ Failed to create/connect database: {e}")
-
-
+#=================================================== END ==========================================================
