@@ -14,7 +14,7 @@ import os
 
 
 def graph(user_input):
-
+    st.session_state.user_input_fleg = False
     db_engine = st.session_state.db_engine
     model = st.session_state.model
 
@@ -220,3 +220,4 @@ def graph(user_input):
         st.session_state.state = response
 
     return st.session_state.state
+
