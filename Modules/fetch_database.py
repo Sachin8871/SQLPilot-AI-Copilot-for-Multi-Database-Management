@@ -1,3 +1,6 @@
+
+#========================================== Fetch database of MySQL ======================================
+
 def fetch_db_mysql(connection, database):
     cursor = connection.cursor()
 
@@ -5,14 +8,14 @@ def fetch_db_mysql(connection, database):
     database_info_str += f"📚 DATABASE: **{database}**\n"
     database_info_str += "=====================================\n\n"
 
-    # Step 1: List all tables
+    # List all tables
     cursor.execute(f"SELECT table_name FROM information_schema.tables WHERE table_schema = '{database}';")
     tables = [row[0] for row in cursor.fetchall()]
 
     for table in tables:
         database_info_str += f"🗂️ TABLE: **{table}**\n"
 
-        # Step 2: Columns
+        # Columns
         database_info_str += "  📌 Columns:\n"
         cursor.execute(f"""
             SELECT column_name, column_type, is_nullable, column_key, extra, column_default
@@ -28,7 +31,7 @@ def fetch_db_mysql(connection, database):
                 f"Default: {default if default is not None else 'None'}\n"
             )
 
-        # Step 3: Primary Key
+        # Primary Key
         cursor.execute(f"""
             SELECT column_name
             FROM information_schema.key_column_usage
@@ -39,7 +42,7 @@ def fetch_db_mysql(connection, database):
             pk_list = ', '.join([row[0] for row in pk])
             database_info_str += f"  🔑 Primary Key: {pk_list}\n"
 
-        # Step 4: Foreign Keys
+        # Foreign Keys
         cursor.execute(f"""
             SELECT column_name, referenced_table_name, referenced_column_name
             FROM information_schema.key_column_usage
@@ -53,7 +56,7 @@ def fetch_db_mysql(connection, database):
         else:
             database_info_str += "  🔗 Foreign Keys: None\n"
 
-        # Step 5: Unique Constraints
+        # Unique Constraints
         cursor.execute(f"""
             SELECT DISTINCT INDEX_NAME, COLUMN_NAME
             FROM information_schema.STATISTICS
@@ -67,7 +70,7 @@ def fetch_db_mysql(connection, database):
         else:
             database_info_str += "  🔒 Unique Constraints: None\n"
 
-        # Step 6: Indexes
+        # Indexes
         cursor.execute(f"SHOW INDEX FROM {table};")
         indexes = cursor.fetchall()
         if indexes:
@@ -80,7 +83,7 @@ def fetch_db_mysql(connection, database):
         else:
             database_info_str += "  📈 Indexes: None\n"
 
-        # Step 7: Check Constraints
+        # Check Constraints
         cursor.execute(f"""
             SELECT CONSTRAINT_NAME, CHECK_CLAUSE
             FROM information_schema.check_constraints
@@ -92,7 +95,7 @@ def fetch_db_mysql(connection, database):
             for name, clause in checks:
                 database_info_str += f"    • {name}: {clause}\n"
 
-        # Step 8: Triggers (optional)
+        # Triggers (optional)
         cursor.execute(f"SHOW TRIGGERS FROM {database} WHERE `Table` = '{table}';")
         triggers = cursor.fetchall()
         if triggers:
@@ -107,6 +110,7 @@ def fetch_db_mysql(connection, database):
     return database_info_str
 
 
+#========================================== Fetch database of SQLite ======================================
 
 def fetch_db_sqlite(connection, database):
     cursor = connection.cursor()
@@ -114,14 +118,14 @@ def fetch_db_sqlite(connection, database):
     database_info_str += f"📚 DATABASE: **{database}**\n"
     database_info_str += "=====================================\n\n"
 
-    # Step 1: List all tables
+    # List all tables
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
     tables = [row[0] for row in cursor.fetchall()]
 
     for table in tables:
         database_info_str += f"🗂️ TABLE: **{table}**\n"
 
-        # Step 2: Columns (PRAGMA table_info)
+        # Columns (PRAGMA table_info)
         database_info_str += "  📌 Columns:\n"
         cursor.execute(f"PRAGMA table_info('{table}');")
         for col in cursor.fetchall():
@@ -133,7 +137,7 @@ def fetch_db_sqlite(connection, database):
                 f"Default: {default_value if default_value is not None else 'None'}\n"
             )
 
-        # Step 3: Foreign Keys
+        # Foreign Keys
         cursor.execute(f"PRAGMA foreign_key_list('{table}');")
         fk = cursor.fetchall()
         if fk:
@@ -144,7 +148,7 @@ def fetch_db_sqlite(connection, database):
         else:
             database_info_str += "  🔗 Foreign Keys: None\n"
 
-        # Step 4: Indexes
+        # Indexes
         cursor.execute(f"PRAGMA index_list('{table}');")
         indexes = cursor.fetchall()
         if indexes:
@@ -159,7 +163,7 @@ def fetch_db_sqlite(connection, database):
         else:
             database_info_str += "  📈 Indexes: None\n"
 
-        # Step 5: Check Constraints (No direct PRAGMA; parse from sqlite_master)
+        # Check Constraints (No direct PRAGMA; parse from sqlite_master)
         cursor.execute(f"""
             SELECT sql FROM sqlite_master 
             WHERE type='table' AND name='{table}';
@@ -174,7 +178,7 @@ def fetch_db_sqlite(connection, database):
         else:
             database_info_str += "  ✅ Check Constraints: None\n"
 
-        # Step 6: Triggers
+        # Triggers
         cursor.execute(f"SELECT name, sql FROM sqlite_master WHERE type='trigger' AND tbl_name='{table}';")
         triggers = cursor.fetchall()
         if triggers:
@@ -188,6 +192,144 @@ def fetch_db_sqlite(connection, database):
 
     return database_info_str
 
+#========================================== Fetch database of PostgreSQL ======================================
+
+def fetch_db_postgresql(connection, database):
+    cursor = connection.cursor()
+    database_info_str = f"Server/Tool : Postgre SQL\n"
+    database_info_str += f"📚 DATABASE: **{database}**\n"
+    database_info_str += "=====================================\n\n"
+
+    # List all tables in 'public' schema
+    cursor.execute("""
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
+    """)
+    tables = [row[0] for row in cursor.fetchall()]
+
+    for table in tables:
+        database_info_str += f"🗂️ TABLE: **{table}**\n"
+
+        # Columns
+        database_info_str += "  📌 Columns:\n"
+        cursor.execute(f"""
+            SELECT column_name, data_type, is_nullable, column_default
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = '{table}';
+        """)
+        for col in cursor.fetchall():
+            name, dtype, nullable, default = col
+            database_info_str += (
+                f"    • `{name}` ({dtype})\n"
+                f"       └── Nullable: {'Yes' if nullable == 'YES' else 'No'} | "
+                f"Default: {default if default else 'None'}\n"
+            )
+
+        # Primary Key
+        cursor.execute(f"""
+            SELECT kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+              ON tc.constraint_name = kcu.constraint_name
+            WHERE tc.constraint_type = 'PRIMARY KEY'
+              AND tc.table_name = '{table}'
+              AND tc.table_schema = 'public';
+        """)
+        pk = cursor.fetchall()
+        if pk:
+            pk_list = ', '.join([row[0] for row in pk])
+            database_info_str += f"  🔑 Primary Key: {pk_list}\n"
+        else:
+            database_info_str += f"  🔑 Primary Key: None\n"
+
+        # Foreign Keys
+        cursor.execute(f"""
+            SELECT kcu.column_name, ccu.table_name AS foreign_table, ccu.column_name AS foreign_column
+            FROM information_schema.table_constraints AS tc
+            JOIN information_schema.key_column_usage AS kcu
+              ON tc.constraint_name = kcu.constraint_name
+            JOIN information_schema.constraint_column_usage AS ccu
+              ON ccu.constraint_name = tc.constraint_name
+            WHERE constraint_type = 'FOREIGN KEY'
+              AND tc.table_name = '{table}'
+              AND tc.table_schema = 'public';
+        """)
+        fk = cursor.fetchall()
+        if fk:
+            database_info_str += "  🔗 Foreign Keys:\n"
+            for col, ref_table, ref_col in fk:
+                database_info_str += f"    • `{col}` → {ref_table}({ref_col})\n"
+        else:
+            database_info_str += "  🔗 Foreign Keys: None\n"
+
+        # Unique Constraints
+        cursor.execute(f"""
+            SELECT kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+              ON tc.constraint_name = kcu.constraint_name
+            WHERE tc.constraint_type = 'UNIQUE'
+              AND tc.table_name = '{table}'
+              AND tc.table_schema = 'public';
+        """)
+        uniques = cursor.fetchall()
+        if uniques:
+            database_info_str += "  🔒 Unique Constraints:\n"
+            for row in uniques:
+                database_info_str += f"    • `{row[0]}`\n"
+        else:
+            database_info_str += "  🔒 Unique Constraints: None\n"
+
+        # Indexes
+        cursor.execute(f"""
+            SELECT indexname, indexdef
+            FROM pg_indexes
+            WHERE schemaname = 'public' AND tablename = '{table}';
+        """)
+        indexes = cursor.fetchall()
+        if indexes:
+            database_info_str += "  📈 Indexes:\n"
+            for name, definition in indexes:
+                database_info_str += f"    • {name}: {definition}\n"
+        else:
+            database_info_str += "  📈 Indexes: None\n"
+
+        # Check Constraints
+        cursor.execute(f"""
+            SELECT conname, pg_get_constraintdef(c.oid)
+            FROM pg_constraint c
+            JOIN pg_class t ON c.conrelid = t.oid
+            WHERE contype = 'c' AND t.relname = '{table}';
+        """)
+        checks = cursor.fetchall()
+        if checks:
+            database_info_str += "  ✅ Check Constraints:\n"
+            for name, clause in checks:
+                database_info_str += f"    • {name}: {clause}\n"
+        else:
+            database_info_str += "  ✅ Check Constraints: None\n"
+
+        # Triggers
+        cursor.execute(f"""
+            SELECT trigger_name, event_manipulation, action_timing
+            FROM information_schema.triggers
+            WHERE event_object_table = '{table}';
+        """)
+        triggers = cursor.fetchall()
+        if triggers:
+            database_info_str += "  ⚙️ Triggers:\n"
+            for name, event, timing in triggers:
+                database_info_str += f"    • {name}: {timing} {event}\n"
+        else:
+            database_info_str += "  ⚙️ Triggers: None\n"
+
+        database_info_str += "\n-------------------------------------\n\n"
+
+    return database_info_str
+
+
+#========================================== Fetch database of SQL server ======================================
 
 def fetch_db_sqlserver(connection, database):
     cursor = connection.cursor()
@@ -195,7 +337,7 @@ def fetch_db_sqlserver(connection, database):
     database_info_str += f"📚 DATABASE: **{database}**\n"
     database_info_str += "=====================================\n\n"
 
-    # Step 1: List all tables
+    # List all tables
     cursor.execute("""
         SELECT TABLE_NAME 
         FROM INFORMATION_SCHEMA.TABLES 
@@ -206,7 +348,7 @@ def fetch_db_sqlserver(connection, database):
     for table in tables:
         database_info_str += f"🗂️ TABLE: **{table}**\n"
 
-        # Step 2: Columns
+        # Columns
         database_info_str += "  📌 Columns:\n"
         cursor.execute(f"""
             SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT
@@ -221,7 +363,7 @@ def fetch_db_sqlserver(connection, database):
                 f"Default: {default if default else 'None'}\n"
             )
 
-        # Step 3: Primary Key
+        # Primary Key
         cursor.execute(f"""
             SELECT k.COLUMN_NAME
             FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS t
@@ -236,7 +378,7 @@ def fetch_db_sqlserver(connection, database):
         else:
             database_info_str += f"  🔑 Primary Key: None\n"
 
-        # Step 4: Foreign Keys
+        # Foreign Keys
         cursor.execute(f"""
             SELECT cu.COLUMN_NAME, pk.TABLE_NAME, pk.COLUMN_NAME
             FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
@@ -254,7 +396,7 @@ def fetch_db_sqlserver(connection, database):
         else:
             database_info_str += "  🔗 Foreign Keys: None\n"
 
-        # Step 5: Unique Constraints
+        # Unique Constraints
         cursor.execute(f"""
             SELECT COLUMN_NAME
             FROM INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE cu
@@ -270,7 +412,7 @@ def fetch_db_sqlserver(connection, database):
         else:
             database_info_str += "  🔒 Unique Constraints: None\n"
 
-        # Step 6: Indexes
+        # Indexes
         cursor.execute(f"""
             SELECT ind.name AS index_name, col.name AS column_name, ind.is_unique
             FROM sys.indexes ind
@@ -288,7 +430,7 @@ def fetch_db_sqlserver(connection, database):
         else:
             database_info_str += "  📈 Indexes: None\n"
 
-        # Step 7: Check Constraints
+        # Check Constraints
         cursor.execute(f"""
             SELECT cc.CONSTRAINT_NAME, cc.CHECK_CLAUSE
             FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS cc
@@ -304,7 +446,7 @@ def fetch_db_sqlserver(connection, database):
         else:
             database_info_str += "  ✅ Check Constraints: None\n"
 
-        # Step 8: Triggers
+        # Triggers
         cursor.execute(f"""
             SELECT tr.name, m.definition
             FROM sys.triggers tr
@@ -325,166 +467,4 @@ def fetch_db_sqlserver(connection, database):
     return database_info_str
 
 
-
-def fetch_db_postgresql(connection, database):
-    cursor = connection.cursor()
-    database_info_str = f"Server/Tool : Postgre SQL\n"
-    database_info_str += f"📚 DATABASE: **{database}**\n"
-    database_info_str += "=====================================\n\n"
-
-    # Step 1: List all tables in 'public' schema
-    cursor.execute("""
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
-    """)
-    tables = [row[0] for row in cursor.fetchall()]
-
-    for table in tables:
-        database_info_str += f"🗂️ TABLE: **{table}**\n"
-
-        # Step 2: Columns
-        database_info_str += "  📌 Columns:\n"
-        cursor.execute(f"""
-            SELECT column_name, data_type, is_nullable, column_default
-            FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = '{table}';
-        """)
-        for col in cursor.fetchall():
-            name, dtype, nullable, default = col
-            database_info_str += (
-                f"    • `{name}` ({dtype})\n"
-                f"       └── Nullable: {'Yes' if nullable == 'YES' else 'No'} | "
-                f"Default: {default if default else 'None'}\n"
-            )
-
-        # Step 3: Primary Key
-        cursor.execute(f"""
-            SELECT kcu.column_name
-            FROM information_schema.table_constraints tc
-            JOIN information_schema.key_column_usage kcu
-              ON tc.constraint_name = kcu.constraint_name
-            WHERE tc.constraint_type = 'PRIMARY KEY'
-              AND tc.table_name = '{table}'
-              AND tc.table_schema = 'public';
-        """)
-        pk = cursor.fetchall()
-        if pk:
-            pk_list = ', '.join([row[0] for row in pk])
-            database_info_str += f"  🔑 Primary Key: {pk_list}\n"
-        else:
-            database_info_str += f"  🔑 Primary Key: None\n"
-
-        # Step 4: Foreign Keys
-        cursor.execute(f"""
-            SELECT kcu.column_name, ccu.table_name AS foreign_table, ccu.column_name AS foreign_column
-            FROM information_schema.table_constraints AS tc
-            JOIN information_schema.key_column_usage AS kcu
-              ON tc.constraint_name = kcu.constraint_name
-            JOIN information_schema.constraint_column_usage AS ccu
-              ON ccu.constraint_name = tc.constraint_name
-            WHERE constraint_type = 'FOREIGN KEY'
-              AND tc.table_name = '{table}'
-              AND tc.table_schema = 'public';
-        """)
-        fk = cursor.fetchall()
-        if fk:
-            database_info_str += "  🔗 Foreign Keys:\n"
-            for col, ref_table, ref_col in fk:
-                database_info_str += f"    • `{col}` → {ref_table}({ref_col})\n"
-        else:
-            database_info_str += "  🔗 Foreign Keys: None\n"
-
-        # Step 5: Unique Constraints
-        cursor.execute(f"""
-            SELECT kcu.column_name
-            FROM information_schema.table_constraints tc
-            JOIN information_schema.key_column_usage kcu
-              ON tc.constraint_name = kcu.constraint_name
-            WHERE tc.constraint_type = 'UNIQUE'
-              AND tc.table_name = '{table}'
-              AND tc.table_schema = 'public';
-        """)
-        uniques = cursor.fetchall()
-        if uniques:
-            database_info_str += "  🔒 Unique Constraints:\n"
-            for row in uniques:
-                database_info_str += f"    • `{row[0]}`\n"
-        else:
-            database_info_str += "  🔒 Unique Constraints: None\n"
-
-        # Step 6: Indexes
-        cursor.execute(f"""
-            SELECT indexname, indexdef
-            FROM pg_indexes
-            WHERE schemaname = 'public' AND tablename = '{table}';
-        """)
-        indexes = cursor.fetchall()
-        if indexes:
-            database_info_str += "  📈 Indexes:\n"
-            for name, definition in indexes:
-                database_info_str += f"    • {name}: {definition}\n"
-        else:
-            database_info_str += "  📈 Indexes: None\n"
-
-        # Step 7: Check Constraints
-        cursor.execute(f"""
-            SELECT conname, pg_get_constraintdef(c.oid)
-            FROM pg_constraint c
-            JOIN pg_class t ON c.conrelid = t.oid
-            WHERE contype = 'c' AND t.relname = '{table}';
-        """)
-        checks = cursor.fetchall()
-        if checks:
-            database_info_str += "  ✅ Check Constraints:\n"
-            for name, clause in checks:
-                database_info_str += f"    • {name}: {clause}\n"
-        else:
-            database_info_str += "  ✅ Check Constraints: None\n"
-
-        # Step 8: Triggers
-        cursor.execute(f"""
-            SELECT trigger_name, event_manipulation, action_timing
-            FROM information_schema.triggers
-            WHERE event_object_table = '{table}';
-        """)
-        triggers = cursor.fetchall()
-        if triggers:
-            database_info_str += "  ⚙️ Triggers:\n"
-            for name, event, timing in triggers:
-                database_info_str += f"    • {name}: {timing} {event}\n"
-        else:
-            database_info_str += "  ⚙️ Triggers: None\n"
-
-        database_info_str += "\n-------------------------------------\n\n"
-
-    return database_info_str
-
-
-
-# def convert_to_docs(database_info_str: str):
-#     docs = []
-
-#     # Split based on table separators
-#     parts = database_info_str.split("\n-------------------------------------\n\n")
-
-#     # First part → DB info only
-#     db_info = parts[0].strip()
-#     docs.append(Document(page_content=db_info, metadata={"type": "database"}))
-
-#     # Each subsequent part → Table info
-#     for table_block in parts[1:]:
-#         table_block = table_block.strip()
-#         if not table_block:
-#             continue
-#         # Extract table name
-#         lines = table_block.splitlines()
-#         table_name = lines[0].replace("🗂️ TABLE: **", "").replace("**", "").strip()
-#         docs.append(
-#             Document(
-#                 page_content=table_block,
-#                 metadata={"type": "table", "table_name": table_name}
-#             )
-#         )
-
-#     return docs
+#================================================ END ===================================================
