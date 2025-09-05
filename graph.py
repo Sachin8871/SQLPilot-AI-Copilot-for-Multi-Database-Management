@@ -14,6 +14,7 @@ import os
 
 
 def graph(user_input):
+    # get db_engine and model
     st.session_state.user_input_fleg = False
     db_engine = st.session_state.db_engine
     model = st.session_state.model
@@ -21,33 +22,38 @@ def graph(user_input):
     #========================================= State Section ===================================================
 
     class QueryState(TypedDict):
-        messages: Annotated[list[BaseMessage], add_messages]
-        task: Literal["Normal_question", "SQL_query"]
-        query: str
-        type: Literal["read", "modufy"]
-        validation_status: Literal["correct", "wrong"]
-        validation_feedback: str
-        current_iteration: int
-        max_iteration: int
-        normal_input_ans: str
-        query_result: str
+        messages: Annotated[list[BaseMessage], add_messages]  # To store input and messages history
+        task: Literal["Normal_question", "SQL_query"]         # To store input type
+        validation_status: Literal["correct", "wrong"]        # To store query status weather it is correct or need some improvement
+        type: Literal["read", "modufy"]                       # To store query's type modify or read only
+        query: str                  # To store SQL query
+        validation_feedback: str    # To store feedback to update the wrong query
+        current_iteration: int      # To store current iteration
+        max_iteration: int          # To store max iteration
+        normal_input_ans: str       # To store normal question's answer
+        query_result: str           # To store query's result
+
 
     #========================================= Model Schema Section ===================================================
 
+    # Schema for refine model
     class Input_Rewriter_Schema(BaseModel):
         task: Literal["Normal_question", "SQL_query"] = Field(discription="Return input's task.")
         updated_input: str = Field(discription=f"'Rewrite the user input so that an LLM can write a best answer for it' or 'write SQL query suggetion'.")
 
+    # Schema for Generate query model 
     class Query_Generater_Schema(BaseModel):
         query: str = Field(discription=f"Write a {db_engine} query for the user input.")
         type: Literal["read", "modify"] = Field(description="Determine whether the query is for read or modify.")
 
+    # Schema for validation model
     class Validation_Schema(BaseModel):
         validation_status: Literal["correct", "wrong"] = Field(discription="Ditermine weather the query is correct or wrong.")
         validation_feedback: str = Field(discription="Wrong query feedback. If the query is correct, leave blank.")
 
     #=========================================== Model Section ========================================================
 
+    # Structured models
     input_rewriter_model = model.with_structured_output(Input_Rewriter_Schema)
     query_genarater_model = model.with_structured_output(Query_Generater_Schema)
     validation_model = model.with_structured_output(Validation_Schema)
@@ -75,7 +81,7 @@ def graph(user_input):
                 update = {"messages": response.updated_input, "task":response.task},
                 goto = "normal_question_ans"
             )
-        else:
+        else:  # task == SQL_query
             return Command(
                 update = {"messages": response.updated_input, "task":response.task},
                 goto = "generate_query"
@@ -96,10 +102,9 @@ def graph(user_input):
 
         chain = prompt | model
         response = chain.invoke({"question":messages})
-        st.session_state.state = state
         return Command(
             update = {"normal_input_ans": response.content, "messages": [AIMessage(content=response.content)]},
-            goto = END
+            goto = END  # Ending of the graph
         )
 
     #----------------------------------- Generate query Node -----------------------------------
@@ -146,7 +151,6 @@ def graph(user_input):
 
         chain = prompt | validation_model
         response = chain.invoke({
-            # "User input": [HumanMessage(content=state["user_input"])],
             "User input": [user_input],
             "query": [HumanMessage(content=state["query"])]
         })
@@ -156,10 +160,10 @@ def graph(user_input):
                 update = {"validation_status": response.validation_status,"validation_feedback": response.validation_feedback},
                 goto = "update_query"
             )
-        else:
+        else:  # validation_status == correct
             return Command(
                 update = {"validation_status": response.validation_status,"validation_feedback": response.validation_feedback, "messages":[AIMessage(content=state['query'])]},
-                goto = END
+                goto = END  # Ending of the graph
             )
 
     #-------------------------------------- Query updation Node -------------------------------------
@@ -193,6 +197,7 @@ def graph(user_input):
 
     builder = StateGraph(QueryState)
 
+    # Define nodes
     builder.add_node("refine_input", refined_input)
     builder.add_node("normal_question_ans", normal_question_ans)
     builder.add_node("generate_query", generate_query)
@@ -202,22 +207,25 @@ def graph(user_input):
     #========================================= Graph compile Section ===================================================
 
 
+    # InMemmory Checkpointer to store state/update of every node
     if "checkpointer" not in st.session_state:
         st.session_state.checkpointer = InMemorySaver()
 
-    builder.set_entry_point("refine_input")
+    builder.set_entry_point("refine_input")  # 'Start' node of the graph
     graph = builder.compile(checkpointer=st.session_state.checkpointer)
 
+    # Define initial state
     initial_state = {
-        # "user_input": [HumanMessage(content=user_input)],
         "messages": [HumanMessage(content=user_input)],
         "max_iteration": 3,
         "current_iteration": 0
     }
 
-    with tracing_v2_enabled(project_name=os.getenv("LANGCHAIN_PROJECT", "SQL")):
+    with tracing_v2_enabled(project_name=os.getenv("LANGCHAIN_PROJECT", "SQL")):  # To track execution of the graph in langsmith
         response = graph.invoke(initial_state, config=st.session_state.config)
         st.session_state.state = response
 
     return st.session_state.state
 
+
+#====================================================== END =================================================================
