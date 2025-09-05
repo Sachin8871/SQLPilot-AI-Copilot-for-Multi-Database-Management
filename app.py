@@ -8,8 +8,18 @@ import streamlit as st
 st.set_page_config("SQL Agent", page_icon="🦜")
 st.title("SQL Agent")
 
+
 if "message_history" not in st.session_state:
     st.session_state.message_history = []
+if "execution_fleg" not in st.session_state:
+    st.session_state.execution_fleg = False
+if "delete_account_fleg" not in st.session_state:
+    st.session_state.delete_account_fleg = False
+if "delete_database_fleg" not in st.session_state:
+    st.session_state.delete_database_fleg = False
+if "user_input_fleg" not in st.session_state:
+    st.session_state.user_input_fleg = False
+
 
 for message in st.session_state["message_history"]:
     if "user" in message:
@@ -29,21 +39,14 @@ for message in st.session_state["message_history"]:
             st.error(message['error'])
 
 
+
 if "login" not in st.session_state:
     st.warning("⚠️ Do not use your personal credentials for the username or password. This project is deployed only for testing purposes. Please use temporary login details instead.")
 
 sign_in.login_ui()
 user_input = st.chat_input("Ask anything about your database...")
-
-
-if "execution_fleg" not in st.session_state:
-    st.session_state.execution_fleg = False
-if "error_explanation_fleg" not in st.session_state:
-    st.session_state.error_explanation_fleg = False
-if "delete_account_fleg" not in st.session_state:
-    st.session_state.delete_account_fleg = False
-if "delete_database_fleg" not in st.session_state:
-    st.session_state.delete_database_fleg = False
+if user_input:
+    st.session_state.user_input_fleg = True
 
 
 if "login" in st.session_state and st.session_state.login:
@@ -94,38 +97,24 @@ if "login" in st.session_state and st.session_state.login:
         st.session_state.table_via_csv = True
         table_via_csv.table_via_csv(db_engine)
 
-    if user_input or st.session_state.execution_fleg or st.session_state.error_explanation_fleg:
+    if user_input or st.session_state.execution_fleg:
         try:
-            st.session_state.error_explanation_fleg = True
-            if not st.session_state.execution_fleg:
+            if st.session_state.user_input_fleg:
                 st.session_state.message_history.append({"user":user_input})
                 with st.chat_message('user'):
                     st.text(user_input)
             
-            if not st.session_state.execution_fleg:
+            if st.session_state.user_input_fleg:
                 state = graph(user_input)
                 st.session_state.state = state
 
             if st.session_state.state['task'] == "Normal_question":
                 st.session_state.message_history[-1]["content"] = st.session_state.state['normal_input_ans']
-                st.text(st.session_state.state["normal_input_ans"])
+                with st.chat_message("ai"):
+                    st.text(st.session_state.state["normal_input_ans"])
             else:
                 query_execution.query_execute(st.session_state.state)
 
         except Exception as e:
             st.error(f"❌ ERROR :\n{e}")
             st.session_state.message_history[-1]["error"] = e
-
-            if st.button("Explain Error Using AI"):
-                st.session_state.error_explanation_fleg = False
-                prompt = ChatPromptTemplate.from_messages([
-                    ("system",
-                     f"You are a helpful assistant. The database contains: \n{st.session_state.database_info_str}\n"
-                     "Given the following SQL error, explain the error and give suggestions."
-                     "Exapain in max 150 words"       
-                    ),
-                    ("human", "{error_message}")
-                ])
-                chain = prompt | model
-                error_explanation = chain.invoke({"error_message": str(e)}).content
-                st.warning(error_explanation)
