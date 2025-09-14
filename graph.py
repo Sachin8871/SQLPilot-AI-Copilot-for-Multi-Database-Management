@@ -221,7 +221,7 @@ def graph(user_input):
         "current_iteration": 0
     }
 
-    with tracing_v2_enabled(project_name=os.getenv("LANGCHAIN_PROJECT", "SQL")):  # To track execution of the graph in langsmith
+    with tracing_v2_enabled(project_name=os.getenv("LANGCHAIN_PROJECT", "LANGCHAIN")):  # To track execution of the graph in langsmith
         response = graph.invoke(initial_state, config=st.session_state.config)
         st.session_state.state = response
 
@@ -229,3 +229,4 @@ def graph(user_input):
 
 
 #====================================================== END =================================================================
+
