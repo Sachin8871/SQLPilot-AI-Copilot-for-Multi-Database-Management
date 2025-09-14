@@ -221,12 +221,13 @@ def graph(user_input):
         "current_iteration": 0
     }
 
-    with tracing_v2_enabled(project_name=os.getenv("LANGCHAIN_PROJECT", "LANGCHAIN")):  # To track execution of the graph in langsmith
-        response = graph.invoke(initial_state, config=st.session_state.config)
-        st.session_state.state = response
+    # with tracing_v2_enabled(project_name=os.getenv("LANGCHAIN_PROJECT", "LANGCHAIN")):  # To track execution of the graph in langsmith
+    response = graph.invoke(initial_state, config=st.session_state.config)
+    st.session_state.state = response
 
     return st.session_state.state
 
 
 #====================================================== END =================================================================
+
 
